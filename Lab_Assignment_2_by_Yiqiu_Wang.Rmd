@@ -1,0 +1,336 @@
+---
+title: "Lab_Assignment_2_by_Yiqiu_Wang"
+author: "Yiqiu Wang"
+date: "2023-02-08"
+header-includes:
+    - \usepackage{setspace}\doublespacing
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE,echo = FALSE)
+```
+
+```{r}
+library(tidyverse)
+library(socviz)
+library(modelsummary)
+library(broom)
+library(kableExtra)
+library(modelr)
+library(ggplot2)
+
+# Get the data
+gss <- gss_sm
+```
+
+# 1 Data preparation and description
+```{r,include=FALSE}
+# We can check which religion(S) are not in the categories above
+table(gss$religion)
+# Jewish
+# This means we need to change "Jewish" into "Other" in our new column
+gss <- gss |> 
+  mutate(belief = ifelse(religion == "Jewish", "Other", ifelse(religion =="Catholic","Catholic", ifelse(religion == "Protestant","Protestant", ifelse(religion == "None","None",ifelse(religion == "Other","Other",NA))))))
+
+# Alternative
+# gss <- gss |> 
+#  mutate(belief = case_when(is.na(religion) ~ NA, 
+#                            religion == "None" ~ "None", 
+#                            religion == "Catholic" ~ "Catholic", 
+#                            religion == "Protestant" ~ "Protestant", 
+#                            TRUE ~ "Other"))
+
+# A double check
+table(gss$belief)
+table(gss$religion)
+which(is.na(gss$belief)) %in% which(is.na(gss$religion))
+# Now we have only 4 categories as required. "Jewish" is added to "Other". Na is kept NA.
+```
+
+
+```{r,include=FALSE}
+# "padeg" stands for father's highest degree and "madeg" stands for mother's highest degree in the data frame.
+# If the information on both parents' education is missing, then record "parentdeg" as NA.
+# "parentdeg" takes the value 1 if the individual’s mother or father has bachelor or a graduate degree, and 0 otherwise
+gss <- gss |> 
+  mutate(parentdeg = ifelse(is.na(padeg) & is.na(madeg),NA,as.numeric(padeg %in% c("Bachelor","Graduate") | madeg %in% c("Bachelor","Graduate"))))
+
+# Alternative
+# gss <- gss |> 
+#  mutate(parentdeg = case_when(is.na(padeg) & is.na(madeg) ~ NA, 
+#                               padeg == "Graduate" ~ 1, 
+#                               padeg == "Bachelor" ~ 1,
+#                               madeg == "Graduate" ~ 1, 
+#                               madeg == "Bachelor" ~ 1, 
+#                                     TRUE ~ 0))
+
+# A check
+which(is.na(gss$parentdeg)) %in% which(is.na(gss$padeg) & is.na(gss$madeg))
+```
+
+```{r}
+# Create a sample where participants who have missing value in "belief", "parentdeg", "obama", "age", "sex" are filtered out.
+samp <- gss |> 
+  filter(!is.na(belief) & !is.na(parentdeg) & !is.na(obama) & !is.na(age) & !is.na(sex))
+```
+
+```{r,include=FALSE}
+# Inspect the structure of our sample 
+# Make "obama" and "parentdeg" factor variables because they are coded either 0 or 1 and they should not be view as continuous variables.
+str(samp)
+samp <- samp |> 
+  mutate(obama = as.factor(obama),
+         parentdeg = as.factor(parentdeg))
+```
+
+```{r}
+# First we divide the sample into 3 groups: all participants, Obama voters and non Obama votes.
+# Then for each group, we calculate N and percentages of all variables as well as the means and standard deviations for continuous variables("age")
+# Name the variables using Heading() so that it is easier to understand the variables
+table_1 <- datasummary((Heading("All participants")*1+Heading("Obama voter")*obama) * (Heading("Age")*age + Heading("Sex")*sex +Heading("Religion")*belief + Heading("Graduate degree parents")*parentdeg + Heading("Obama voter")*obama + Heading("Number")*1) ~ mean + sd + N + Percent(denom = Equal(obama)),
+            data = samp,
+            fmt = 2,
+            title = "Descriptive Statistics for Participants of the General Social Survey (GSS)",
+            notes = c("Source: the socviz Package.",
+                      "Graduate degree parents is coded 1 if at least one of the participant's parents has a bachelor/graduate","degree and 0 otherwise",
+                      "Obama voter equals to 1 if the participant voted for Obama in 2012 and 0 otherwise (Romney, other","candidate, did not vote, refused, etc.)"),booktabs=TRUE)
+
+table_1 |>  kable_styling(latex_options = "hold_position")
+```
+
+Answers:
+
+|     Data used in this assignment is drawn from the General Social Survey (GSS) in the SocViz R package, developed by Kieran Healy.
+
+|     Table 1 shows the descriptive statistics for participants of the General Social Survey (GSS) based on five variables: "Age", "Sex", "Religion", "Graduate degree parents" and "Obama voters". "Religion" is divided into four categories: Catholic, Protestant, Other and None. "Graduate degree parents" is coded 1 if a participant has at least one parent who has a bachelor/graduate degree and 0 otherwise. "Obama voter" is coded 1 if a participant voted for Obama in 2012 and 0 otherwise(Romney, other","candidate, did not vote, refused, etc.). 
+
+|     The participants who has missing data in the variables mentioned above are filtered out. The total number of participants presented in Table 1 is 1693. After dividing these participants into 2 groups based on whether they voted for Obama or not, Table 1 consists of 3 parts providing information on the full sample(1693), and separately for Obama voters(1058) and non-Obama voters(635).
+
+|     In the first part of Table 1, the average age of 1693 participants is 53.68 with a standard deviation equals to 16.66 which suggests the ages are clustered near the mean. 43%(728) of 1693 participants are male and 57%(965) of all participants are female. Over half of all participants(50.56%) are Protestants while a small portion of all participants(7.27%) have religion other than Catholicism and Protestantism. The portion of Catholic participants(22.39%) is slightly higher than that of participants who have no religious beliefs(19.79%). 74.48%(1261) of all participant have no college educated parents.
+
+|      About one third(37.51%) of all participants did not vote for Obama in 2012. The second part of Table 1 shows the statistics for non Obama voters(635). The average age of non Obama voters is 55.95 with a standard deviation equals to 16.26 which suggests the ages are clustered near the mean. The number of male(309, 48.66%) and female(326, 51.34%) is close in non Obama voters with the percentage of female being slightly higher. 61.89%(393) of non Obama voters are Protestants, 23.78%(151) are Catholics, 9,76%(62) have no religious beliefs and only 4.57%(29) are of other religious beliefs. Only 25.35%(161) of non Obama voters has at least one college educated parent.
+
+|     The third part of Table 1 shows the statistics for Obama voters(1058). The average age of Obama voters is 52.32 with a standard deviation equals to 16.76 which suggests the ages are clustered near the mean. There are way more female(639, 60.40%) than male(419, 39.60%) among Obama voters which is different from the statistics of non Obama voters. Protestantism still holds the most believers among Obama voters(463, 43.46%). But there are slightly more voters with no religion(273, 25.80%) than Catholic voters(228, 21.55%) which is different from the statistics of non Obama voters. Still, number of voters of other religious beliefs is the smallest among Obama voters(94, 8.88%). Only 25.62%(271) of Obama voters have at least one college educated parent. The percentage is very similar to that of non Obama voters.  
+
+
+
+# 2 Model estimation and odds ratios
+```{r}
+# Set "None" as the reference category in belief
+samp <- samp |>
+  mutate(belief= relevel(as.factor(belief), ref = "None"))
+
+# Use our sample data frame "samp" to avoid NA
+# Estimate three logistic regression models where voting for Obama (the obama variable) is the dependent variable and the following are explanatory variables:
+
+# a) only the new religion variable.
+obama_rel_log <- glm(obama ~ belief, data = samp, 
+                     family = "binomial"(link = "logit"))
+
+# b) same as a), plus the new parental education variable.
+obama_rel_parentdeg_log <- glm(obama ~ belief + parentdeg, 
+                               data = samp,
+                               family = "binomial"(link = "logit"))
+
+# c) same as b), plus sex and age variables.
+obama_rel_parentdeg_sex_age_log <- glm(obama ~ belief + parentdeg + sex + age, 
+                                       data = samp, 
+                                       family = "binomial"(link = "logit"))
+# Put three models in one table
+models <- list(
+  "Model A" = obama_rel_log,
+  "Model B" = obama_rel_parentdeg_log,
+  "Model C" = obama_rel_parentdeg_sex_age_log
+)
+# Use "statistic = 'conf.int'" here so that we can the confidence interval in the table
+modelsummary(models, 
+             statistic = "conf.int",
+             fmt = 3,
+             stars = TRUE,
+             output="kableExtra",
+             exponentiate = TRUE,
+             gof_omit = "Log.Lik.& F & RMSE",
+             title = "Logistic regression models. Voting for Obama",
+             notes = list("Source: the socviz Package.", 
+                          "Comments: belief is a variable indicating the religion of the participants","in which having no religion is the reference category","parentdeg is a variable that is coded 1 if the participants", "has at least one college educated parent and 0 otherwise", "which is the reference category here."))
+```
+
+Answers:
+
+|     In Table 2, We ran 3 logistic regression models to estimate the effect of religious beliefs, parents' education, sex and age of a participant on the odds of voting for Obama in 2012. We included religious belief in Model A, religious belief and parents' education in Model B and religious belief, parents' education, sex and age in Model C.
+
+|     We filtered out all participants who having missing data in the 4 types of information we mentioned above so the total number of observations is 1693 for the 3 models.
+
+|     "belief" indicates the religious belief of a participant which "beliefNone"(having no religion) is the reference category. "parentdeg" is a variable that is coded 1 if the participants has at least one college educated parent and 0 otherwise, which is the reference category here. In Model B and Model C, being a male is the reference category. In Model C, age equals to 0 is the reference category.
+
+|     In Model A, the intercept equals to 4.403. The odds of a voter without religion voting for Obama are 4.403. 
+|     For a Catholic voter, the odds of voting for Obama are significantly(p < 0.001) decreased by a factor of .343, holding all other variables constant. Or, if the voter is a Catholic, the odds of voting for Obama are decreased 65.7%, holding all other variables constant. The odds that a Catholic voter voting for Obama are .343 times the odds that a voter without religion voting for Obama. 
+
+|     For a Protestant voter, the odds of voting for Obama are significantly(p < 0.001) decreased by a factor of .268, holding all other variables constant. Or, if the voter is a Protestant, the odds of voting for Obama are decreased 73.2%, holding all other variables constant. The odds that a Protestant voter voting for Obama are .268 times the odds that a voter without religion voting for Obama. But having other religion beliefs has a negative but insignificant(p > 0.05) effect on the change of odds of voting for Obama. 
+
+|     In conclusion, being a Catholic or a Protestant makes a voter less likely to vote for Obama in 2012. The protestant voters were the least willingly to vote for Obama. 
+
+|     In Model B, the intercept equals to 4.510. The odds of a voter who has no religious belief and no college educated parents voting for Obama are 4.510. 
+
+|     For a Catholic voter, the odds of voting for Obama are significantly(p < 0.001) decreased by a factor of .340, holding all other variables constant. Or, if the voter is a Catholic, the odds of voting for Obama are decreased 66.0%, holding all other variables constant. The odds that a Catholic voter voting for Obama are .340 times the odds that a voter without religion and college educated parents voting for Obama.
+
+|     For a Protestant voter, the odds of voting for Obama are significantly(p < 0.001) decreased by a factor of .266, holding all other variables constant. Or, if the voter is a Protestant, the odds of voting for Obama are decreased 73.4%, holding all other variables constant. The odds that a Protestant voter voting for Obama are .266 times the odds that a voter without religion and college educated parents voting for Obama.
+
+|     Like in Model A, having other religious beliefs has a negative but insignificant(p > 0.05) effect on the odds of voting for Obama. We include parents' education in Model B, but having at least one college educated parent has a negative but insignificant effect(p > 0.05) on the odds of voting for Obama. The conclusion is alike that of Model A that Catholics and Protestants are less likely to vote for Obama with Protestant voter being the least likely to vote for Obama. However, having at least one college educated parent does not significantly affect one's likelihood to vote for Obama or not.
+
+|     In Model C, the intercept equals to 6.411. The odds of a 0-year-old(though impossible) male who has no religious belief and no college educated parents voting for Obama are 6.411.
+
+|     For a Catholic voter, the odds of voting for Obama are significantly(p < 0.001) decreased by a factor of .331, holding all other variables constant. Or, if the voter is a Catholic, the odds of voting for Obama are decreased 66.9%, holding all other variables constant.
+
+|     For a Protestant voter, the odds of voting for Obama are significantly(p < 0.001) decreased by a factor of .250, holding all other variables constant. Or, if the voter is a Protestant, the odds of voting for Obama are decreased 75.0%, holding all other variables constant.
+
+|     For a female voter, the odds of voting for Obama are significantly(p < 0.001) increased by a factor of 1.710, holding all other variables constant. Or, if the voter is female, the odds of voting for Obama are increased 71.0%, holding all other variables constant.
+
+|     For each additional year increased in age, the odds of voting for Obama are significantly(p < 0.001) decreased by a factor of .989, holding all other variables constant. Or, with one year increase in age, the odds of voting for Obama are decreased 1.1%, holding all other variables constant.
+
+|     Like in Model B, neither having other religious beliefs nor having at least one college educated parent has significant(p > 0.01) effect on the odds of voting for Obama. In conclusion, while being a Catholic or a Protestant lowers the probability of one voting for Obama, being a female increases the probability. Younger people were more likely to vote for Obama.
+
+|     The intercept increases from 4.403(Model A) to 5.510(Model B) and then to 6.411(Model C) in three models. When we take more variables into consideration, The baseline of the odds of voting for Obama continues to increase. The decrease in odds caused by being a Catholic or a Protestant continues to grow as we controlled for more variables in the models. The unwillingness of Catholic and Protestant voters to vote for Obama becomes more obvious when we take more variables into account. The log likelihood increases very slightly from Model A to Model B, but the increase is more obvious from Model B to Model C. AIC and BIC increased when we move from Model Ato Model B but they decreased as we moved from Model B to Model C, Such decrease indicates Model C should have better prediction than Model B so Model C is preferred.
+
+
+
+```{r}
+# Present a graph with the odds ratios from model c, with confidence intervals and without the intercept.
+theme_set(theme_light())
+
+estimates <- tidy(obama_rel_parentdeg_sex_age_log, exponentiate = TRUE, conf.int = TRUE)
+estimates |>  
+  filter(term != "(Intercept)") |> 
+  ggplot(aes(term, estimate)) +
+  geom_hline(yintercept = 1, color = "red", linetype = "dashed") +
+  geom_point() +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high, width = .1))+
+  labs(title = "Graph 1: 
+       Logistic regression.Voting for Obama",
+       y = "Odds ratios",
+       x = "Variables",
+       caption = "Data from the socviz R Package")
+```
+
+Answers:
+
+|     Garph 1 shows the results from Model C. A voter has about 0.989 times the odds of voting for Obama than another voter who is one year younger than him/her. A Catholic voter has about 0.332 times the odds of voting for Obama than a voter with no religious belief. A Protestant voter has about 0.250 times the odds of voting for Obama than a voter with no religious belief. A female voter has about 1.711 times the odds of voting for Obama than a male voter. 
+
+|     Table 2 has already shown that being a voter with other religious beliefs or a voter with at least one college educated parent has no significant effect on the odds of voting for Obama. In Graph 1, their confidence intervals are divided by the line indicating odds ratio equals to 0 instead of being below or above the line. 
+
+|     So, male voters, older voters, Catholic voters and Protestant voters were less likely to vote for Obama in 2012.
+
+
+
+# 3 Predicted probabilities
+```{r}
+# Predict the probability of a voter voting for Obama based on Model C
+# If the predicted result is higher than 0.5, record it as 1 and 0 otherwise
+obama_groups_pred <- augment(obama_rel_parentdeg_sex_age_log, 
+                                type.predict = "response",
+                             se_fit = TRUE,
+                             newdata = data_grid(samp, age, belief, parentdeg,sex)) |>
+                             mutate(.pred = as.numeric(.fitted > .5))
+
+# Create one graph that visualizes the predicted probability of voting for Obama
+# including confidence intervals,at different ages and for the four religion categories: Protestant, Catholic, other, and none. 
+# We only want the predictions for a female with at least one college educated parent.(achieve this by using filter())
+obama_groups_pred |> 
+  mutate(lower = .fitted - 1.96 * .se.fit,
+          upper = .fitted + 1.96 * .se.fit) |> 
+  filter(sex == "Female",
+         parentdeg == 1) |> 
+  ggplot(aes(age, .fitted, color = belief, fill = belief)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower,
+                  ymax = upper), 
+                  alpha = 0.2) +
+  labs(title = "Graph 2: 
+Predicted probability of a female (with at least one 
+college educated parent) voting for Obama in 2012. 
+Logistic regression",
+       y = "Predicted probability of voting for Obama",
+       x = "Age",
+       color = "Religion",
+       fill = "Religion",
+       caption = "Data from GSS through the socviz R Package.")
+```
+
+Answers:
+
+|     Graph 2 shows the predicted probability of a female(who has at least one college educated parent) voting for Obama in 2012 based on different age and religious beliefs.
+|     In general(keep age as constant), if this female voter has no religious belief, it is expected that she has the highest probability of voting for Obama among other female voters with various religious beliefs. Female voters with religion other than Catholicism and Protestantism is the second most likely to vote for Obama in the graph. If this female voter is a protestant, she would be the least likely to vote for Obama.
+|     Age has a negative effect on the likelihood of voting for Obama. Regardless of her religion, the probability of this female voter voting for Obama keeps decreasing with the increase in age.
+
+
+
+# 4 Model fit
+The models you have estimated are nested. Explain how the models are nested (which is nested in which?) and why. 
+
+Perform likelihood ratio tests comparing model b to model a, and model c to model b. Also calculate Nagelkerke’s pseudo-R2 and the share of observations correctly predicted for all three models.
+```{r,include=FALSE}
+library(DescTools)
+
+# Likelihood ratio tests
+anova(obama_rel_log, obama_rel_parentdeg_log, test = "Chisq")
+anova(obama_rel_parentdeg_log, obama_rel_parentdeg_sex_age_log, test = "Chisq")
+
+library(lmtest)
+lrtest(obama_rel_log, obama_rel_parentdeg_log)
+lrtest(obama_rel_parentdeg_log, obama_rel_parentdeg_sex_age_log)
+# Nagelkerke’s pseudo-R2
+r2_N_model_a <- PseudoR2(obama_rel_log, which = "Nagelkerke") |> 
+  round(4)
+r2_N_model_b <- PseudoR2(obama_rel_parentdeg_log, which = "Nagelkerke") |> 
+  round(4)
+r2_N_model_c <- PseudoR2(obama_rel_parentdeg_sex_age_log, which = "Nagelkerke") |> 
+  round(4)
+# The share of observations correctly predicted
+# A
+pred_1 <- augment(obama_rel_log, type.predict = "response",
+                             se_fit = TRUE) |>
+                             mutate(.pred = as.numeric(.fitted > .5))
+m_pred_1 <- mean(pred_1$obama == pred_1$.pred, na.rm = TRUE) |> 
+  round(4)
+
+# B
+pred_2 <- augment(obama_rel_parentdeg_log, type.predict = "response", se_fit = TRUE) |>
+                             mutate(.pred = as.numeric(.fitted > .5))
+m_pred_2 <- mean(pred_2$obama == pred_2$.pred, na.rm = TRUE) |> 
+  round(4)
+
+# C
+pred_3 <- augment(obama_rel_parentdeg_sex_age_log, type.predict = "response",
+                             se_fit = TRUE) |>
+                             mutate(.pred = as.numeric(.fitted > .5))
+m_pred_3 <- mean(pred_3$obama == pred_3$.pred, na.rm = TRUE) |> 
+  round(4)
+```
+
+
+```{r}
+df <- data.frame("Model A" = c(-1072.9,"/","/","/",r2_N_model_a,m_pred_1),
+                 "Model B" = c(-1072.7,1,"0.3912","0.5316",r2_N_model_b,m_pred_2),
+                 "Model C" = c(-1055.0,2,"35.485","1.971e-08",r2_N_model_c,m_pred_3))
+rownames(df) = c("Loglik","DF(compared to former model)","Chisq(compared to former model)","Pr(>Chisq)(compared to former model)","Nagelkerke’s pseudo-R2","correct prediction rate")
+kable(df, format = "latex", caption = "Model fit statistics",col.names = c('Model A', 'Model B', 'Model C')) |> 
+  kable_styling(bootstrap_options = "striped", 
+                full_width = FALSE, 
+                position = "center",
+                latex_options = "hold_position")
+
+```
+
+Answers:
+
+|     The three models, Model A, Model B and Model C are nested. The term "nested" means a model is a subset of another model. We included religion in Model A. In Model B, we used religion as well as parents' education as independent variables. So Model A is a constrained model nested in the unconstrained Model B. The constrained beta(parents' education) = 0. In Model C, besides religion and parents' education, we also included sex and age as independent variables. So Model B is a constrained model nested in the unconstrained Model C. The constrained beta(sex) = 0 and beta(age) = 0 in Model B.
+
+|     The first three rows contains the results after performing likelihood ratio tests comparing Model B to Model A, and Model C to Model B. The log likelihood increases obviously when we move from Model B to Model C. DF is the difference in estimated parameters. Model B has one more estimated parameter than Model A and Model C has two more estimated parameters than Model B. Chisq is relatively small(0.3912) when we compare Model B to Model A but when we compare Model C to Model B, Chisq becomes greater(35.485) which conveys a better model fit. The p-value which equals to 0.5316(>0.05) is insignificant when we compare Model B to Model A. This means that the full model(Model B) and the nested model(Model A) fit the data equally well. So, we should use the nested model(Model A).  The p-value which equals to 1.971e-08(<0.001) is significant when we compare Model C to Model B. This means that the full model(Model C) fits the data significantly better than the nested model(Model B). So, we should use the full model(Model C).
+
+|     Nagelkerke’s pseudo-R2 continues to increase as we controlled for more variables. But this does not necessarily indicate a better model fit because this index increases as long as we add more variables into a model regardless of the effect of those variables being significant or not. For example, we know the newly added variable about parents' education in Model B does not have a significant effect on the odds of voting for Obama, but Nagelkerke’s pseudo-R2 increased anyway.
+
+|     The share of observations correctly predicted does not change when we add parents' education to the model(Model A to Model B). The effect of this variable is insignificant and does not improve the prediction. The share of observations correctly predicted increased when we further controlled for sex and age in the model(Model B to Model C) which indicates better model fit.
+
+|     In conclusion, although Model B has controlled for one more variable than Model A, it does not have a better model fit than Model A. Model C has the best model fit among the three models. 
+
