@@ -1,6 +1,6 @@
 ---
-title: "Lab_Assignment_2_by_Yiqiu_Wang"
-author: "Yiqiu Wang"
+title: "XXX"
+author: "XXX"
 date: "2023-02-08"
 header-includes:
     - \usepackage{setspace}\doublespacing
